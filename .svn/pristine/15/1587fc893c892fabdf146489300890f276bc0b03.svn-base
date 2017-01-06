@@ -1,0 +1,150 @@
+//
+//  PersonalViewController.m
+//  PracticeiOS
+//
+//  Created by 新龙信息 on 16/12/14.
+//  Copyright © 2016年 新龙信息. All rights reserved.
+//
+
+#import "PersonalViewController.h"
+#import "PersonTableViewCell.h"
+#import "PersonalDataViewController.h"
+#import "SetUpViewController.h"
+
+@interface PersonalViewController () <UITableViewDataSource,
+                                      UITableViewDelegate> {
+  UITableView *_personalTableview;
+
+  NSArray *_titleArray;
+}
+@end
+
+@implementation PersonalViewController
+- (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
+  if ([UDOBJ(@"LogInOut") isEqualToString:@"YES"]) {
+    [self LoadData];
+    UDSETOBJ(@"NO", @"LogInOut");
+  }
+}
+- (PersonalModel *)Personal {
+  if (_Personal == nil) {
+    _Personal = [[PersonalModel alloc] init];
+  }
+  return _Personal;
+}
+- (void)viewDidLoad {
+  [super viewDidLoad];
+  [self LoadData];
+  //数据
+  _titleArray = [[NSArray alloc] initWithObjects:@"设置", nil];
+  [self CreatUI];
+}
+- (void)CreatUI {
+  _personalTableview = [[UITableView alloc]
+      initWithFrame:CGRectMake(10, 0, 230, SCREEN_HEIGHT - 114)
+              style:UITableViewStyleGrouped];
+  _personalTableview.delegate = self;
+  _personalTableview.dataSource = self;
+  _personalTableview.bounces = NO;
+  [self.view addSubview:_personalTableview];
+}
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+  return 2;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView
+    numberOfRowsInSection:(NSInteger)section {
+  if (section == 0) {
+    return 1;
+  } else {
+    return _titleArray.count;
+  }
+}
+- (CGFloat)tableView:(UITableView *)tableView
+    heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+  if (indexPath.section == 0) {
+    return 70;
+  } else {
+    return 40;
+  }
+}
+- (CGFloat)tableView:(UITableView *)tableView
+    heightForFooterInSection:(NSInteger)section {
+  return 0.01;
+}
+- (CGFloat)tableView:(UITableView *)tableView
+    heightForHeaderInSection:(NSInteger)section {
+  return 10;
+}
+- (UITableViewCell *)tableView:(UITableView *)tableView
+         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+  if (indexPath.section == 0) {
+    PersonTableViewCell *cell =
+        [tableView dequeueReusableCellWithIdentifier:@"firstCell"];
+    if (cell == nil) {
+      cell = [[[NSBundle mainBundle] loadNibNamed:@"PersonTableViewCell"
+                                            owner:nil
+                                          options:nil] objectAtIndex:0];
+    }
+    cell.imageV.layer.cornerRadius = 25;
+    cell.imageV.clipsToBounds = YES;
+    if (_Personal.data.studentHeads.count > 0) {
+      [cell.imageV
+          sd_setImageWithURL:[NSURL
+                                 URLWithString:_Personal.data
+                                                   .studentHeads[0][@"source"]]
+            placeholderImage:IMG(@"iconview")];
+    }
+
+    cell.nameLabel.text = _Personal.data.name;
+    return cell;
+  } else {
+    UITableViewCell *cell =
+        [tableView dequeueReusableCellWithIdentifier:@"cell"];
+    if (cell == nil) {
+      cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                    reuseIdentifier:@"cell"];
+    }
+    cell.imageView.image = IMG(@"shezhi");
+    cell.textLabel.text = _titleArray[indexPath.row];
+    return cell;
+  }
+}
+- (void)tableView:(UITableView *)tableView
+    didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+  if (indexPath.section == 0) {
+    //进入个人信息
+    PersonalDataViewController *dataVC =
+        [[PersonalDataViewController alloc] init];
+    dataVC.PersonalData = ^{
+      [self LoadData];
+    };
+    [self.navigationController pushViewController:dataVC animated:YES];
+  } else {
+    //进入设置
+    [self.navigationController pushViewController:[SetUpViewController alloc]
+                                         animated:YES];
+  }
+  [self slide];
+}
+#pragma mark 获取学生信息
+- (void)LoadData {
+  [[HttpTool sharedInstance] postWithUrl:Student_info
+      parameters:@{
+        @"app_token" : UDOBJ(ZToken),
+        @"client" : DEVICEUUID
+      }
+      sucess:^(id json) {
+        [self.Personal mj_setKeyValues:json];
+        if (_Personal.status == 200) {
+          [_personalTableview reloadData];
+        } else {
+          KOMG(_Personal.msg);
+        }
+      }
+      failur:^(NSError *error) {
+        KOMG(kHttpError);
+      }];
+}
+@end

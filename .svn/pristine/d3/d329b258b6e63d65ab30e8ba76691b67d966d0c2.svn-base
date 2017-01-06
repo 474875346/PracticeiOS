@@ -1,0 +1,274 @@
+//
+//  InputPasswordViewController.m
+//  PracticeiOS
+//
+//  Created by 新龙信息 on 16/12/19.
+//  Copyright © 2016年 新龙信息. All rights reserved.
+//
+
+#import "InputPasswordViewController.h"
+#import "AppDelegate.h"
+#import "Common.h"
+#import "LabelAndTFView.h"
+#import "RegisterAndPasswordRequest.h"
+
+@interface InputPasswordViewController () <UIPickerViewDelegate,
+                                           UIPickerViewDataSource> {
+  UITextField *_nameTF;
+  UITextField *_passwordTF;
+  UITextField *_collegeTF;
+  UIButton *_nextButton;
+  NSMutableArray *_collegeArray;
+  UIPickerView *_picker;
+  NSInteger _tag;
+}
+@end
+
+@implementation InputPasswordViewController
+
+- (void)viewWillDisappear:(BOOL)animated {
+  [super viewWillDisappear:YES];
+  [self.view endEditing:YES];
+}
+- (void)viewDidLoad {
+  [super viewDidLoad];
+  if (_LogInOut) {
+    [self addNavigationHeadBackImage];
+    if ([_TitleCode isEqualToString:@"注册"]) {
+      [self addtitleWithString:@"设置昵称密码"];
+    } else {
+      [self addtitleWithString:@"设置密码"];
+    }
+
+    [self addBackButton];
+  }
+
+  if ([_TitleCode isEqualToString:@"注册"]) {
+    self.title = @"设置昵称密码";
+  } else {
+    self.title = @"设置密码";
+  }
+
+  self.view.backgroundColor = [UIColor whiteColor];
+  self.automaticallyAdjustsScrollViewInsets = NO;
+  _collegeArray = [[NSMutableArray alloc] init];
+  if ([_TitleCode isEqualToString:@"注册"]) {
+    //输入密码
+    LabelAndTFView *view = [[LabelAndTFView alloc]
+               initWithFrame:CGRectMake(0.05 * SCREEN_WIDTH, 164,
+                                        0.9 * SCREEN_WIDTH, 120)
+         WithLabelTitleArray:@[ @"昵称", @"密码", @"学校" ]
+        WithPlaceholderArray:@[
+          @"输入昵称",
+          @"输入密码(最大长度32)",
+          @"选择学校",
+        ]];
+    _nameTF = view.TFArray[0];
+    _passwordTF = view.TFArray[1];
+    _collegeTF = view.TFArray[2];
+    [_nameTF addTarget:self
+                  action:@selector(textFieldDidChange)
+        forControlEvents:UIControlEventEditingChanged];
+    [_passwordTF addTarget:self
+                    action:@selector(textFieldDidChange)
+          forControlEvents:UIControlEventEditingChanged];
+    [self.view addSubview:view];
+
+    //关掉学校tf的交互性，在上面覆盖透明button
+    _collegeTF.userInteractionEnabled = NO;
+    _collegeTF.clearButtonMode = UITextFieldViewModeNever;
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+    button.backgroundColor = [UIColor clearColor];
+    button.frame = CGRectMake(X(_collegeTF), Y(_collegeTF) + 164, W(_collegeTF),
+                              H(_collegeTF));
+    [button addTarget:self
+                  action:@selector(picker)
+        forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:button];
+
+    //获取学院信息
+    [RegisterAndPasswordRequest
+        getUniversityNameWithCompletionBlock:^(NSDictionary *dic) {
+          if ([dic[@"status"] intValue] == 200) {
+            NSLog(@"获取学院信息成功");
+            NSArray *array = dic[@"data"];
+            for (NSDictionary *dicc in array) {
+              [_collegeArray addObject:dicc];
+            }
+            //创建pickerview
+            _picker = [[UIPickerView alloc]
+                initWithFrame:CGRectMake(0, SCREEN_HEIGHT - 200, SCREEN_WIDTH,
+                                         200)];
+            _picker.delegate = self;
+            _picker.dataSource = self;
+            _picker.hidden = YES;
+            _picker.backgroundColor = [UIColor groupTableViewBackgroundColor];
+            [self.view addSubview:_picker];
+          } else {
+            KOMG(dic[@"msg"]);
+          }
+        }];
+  } else {
+    LabelAndTFView *view = [[LabelAndTFView alloc]
+               initWithFrame:CGRectMake(0.05 * SCREEN_WIDTH, 164,
+                                        0.9 * SCREEN_WIDTH, 40)
+         WithLabelTitleArray:@[ @"密码" ]
+        WithPlaceholderArray:@[ @"输入密码(最大长度32)" ]];
+    _passwordTF = view.TFArray[0];
+    [_passwordTF addTarget:self
+                    action:@selector(textFieldDidChange)
+          forControlEvents:UIControlEventEditingChanged];
+    [self.view addSubview:view];
+  }
+
+  //进入新龙
+  _nextButton = [UIButton buttonWithType:UIButtonTypeCustom];
+  _nextButton.frame =
+      CGRectMake(0.05 * SCREEN_WIDTH, 314, 0.9 * SCREEN_WIDTH, 40);
+  _nextButton.layer.cornerRadius = 5;
+  _nextButton.clipsToBounds = YES;
+  _nextButton.alpha = 0.3;
+  _nextButton.userInteractionEnabled = NO;
+  if ([_TitleCode isEqualToString:@"注册"]) {
+    [_nextButton setTitle:@"注册" forState:UIControlStateNormal];
+  } else {
+    [_nextButton setTitle:@"找回密码" forState:UIControlStateNormal];
+  }
+  _nextButton.backgroundColor = COLOR(76, 171, 253, 1);
+  [_nextButton addTarget:self
+                  action:@selector(gotoDD)
+        forControlEvents:UIControlEventTouchUpInside];
+  [self.view addSubview:_nextButton];
+}
+
+- (void)picker {
+  //调出pickerview
+  NSLog(@"picker++++++");
+  _picker.hidden = NO;
+}
+- (void)textFieldDidChange {
+  //判断是否符合密码规范
+  if ([_TitleCode isEqualToString:@"注册"]) {
+    if (![_nameTF.text isEqualToString:@""]) {
+      if (![_passwordTF.text isEqualToString:@""]) {
+        _nextButton.alpha = 1;
+        _nextButton.userInteractionEnabled = YES;
+        if (_passwordTF.text.length > 20) {
+          _passwordTF.text = [_passwordTF.text substringToIndex:20];
+          KOMG(@"密码长度不得超过20个字符")
+        }
+      }
+    } else {
+      _nextButton.alpha = 0.3;
+      _nextButton.userInteractionEnabled = NO;
+    }
+  } else {
+    if (![_passwordTF.text isEqualToString:@""]) {
+      _nextButton.alpha = 1;
+      _nextButton.userInteractionEnabled = YES;
+      if (_passwordTF.text.length > 20) {
+        _passwordTF.text = [_passwordTF.text substringToIndex:20];
+        KOMG(@"密码长度不得超过20个字符")
+      }
+    } else {
+      _nextButton.alpha = 0.3;
+      _nextButton.userInteractionEnabled = NO;
+    }
+  }
+}
+
+- (void)gotoDD {
+
+  if ([_TitleCode isEqualToString:@"注册"]) {
+    if ([_collegeTF.text isEqualToString:@""]) {
+      KOMG(@"学校不能为空");
+      return;
+    }
+    NSDictionary *dic = _collegeArray[_tag];
+    [RegisterAndPasswordRequest
+        registerNumberRequestWithPhone:_phone
+                              WithName:_nameTF.text
+                          WithPassword:_passwordTF.text
+                         WithVerfiCode:_code
+                         WithCollegeId:dic[@"id"]
+                   WithCompletionBlack:^(NSDictionary *dic) {
+                     if ([[dic objectForKey:@"status"] intValue] == 200) {
+                       if (_LogInOut) {
+                         for (UIViewController *controller in self
+                                  .navigationController.viewControllers) {
+                           if ([controller
+                                   isKindOfClass:[ViewController class]]) {
+                             [self.navigationController
+                                 popToViewController:controller
+                                            animated:YES];
+                           }
+                         }
+                       } else {
+                         [self.navigationController
+                             popToRootViewControllerAnimated:YES];
+                       }
+
+                     } else {
+                       KOMG(dic[@"msg"]);
+                     }
+                   }];
+  } else {
+    [[HttpTool sharedInstance] postWithUrl:student_resetPass
+        parameters:@{
+          @"phone" : _phone,
+          @"verifyCode" : _code,
+          @"password" : _passwordTF.text
+        }
+        sucess:^(id json) {
+          if ([[json objectForKey:@"status"] intValue] == 200) {
+            if (_LogInOut) {
+              for (UIViewController *controller in self.navigationController
+                       .viewControllers) {
+                if ([controller isKindOfClass:[ViewController class]]) {
+                  [self.navigationController popToViewController:controller
+                                                        animated:YES];
+                }
+              }
+            } else {
+              [self.navigationController popToRootViewControllerAnimated:YES];
+            }
+            KOMG(@"找回密码成功");
+          } else {
+            KOMG(json[@"msg"]);
+          }
+        }
+        failur:^(NSError *error) {
+          KOMG(kHttpError);
+        }];
+  }
+}
+
+// picker delegate and datasource
+- (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView {
+  return 1; //第一个展示字母、第二个展示数字
+}
+
+- (NSInteger)pickerView:(UIPickerView *)pickerView
+    numberOfRowsInComponent:(NSInteger)component {
+  return _collegeArray.count;
+}
+
+- (nullable NSString *)pickerView:(UIPickerView *)pickerView
+                      titleForRow:(NSInteger)row
+                     forComponent:(NSInteger)component __TVOS_PROHIBITED {
+
+  NSDictionary *dic = _collegeArray[row];
+  return dic[@"name"];
+}
+
+- (void)pickerView:(UIPickerView *)pickerView
+      didSelectRow:(NSInteger)row
+       inComponent:(NSInteger)component __TVOS_PROHIBITED {
+
+  NSDictionary *dic = _collegeArray[row];
+  _collegeTF.text = dic[@"name"];
+  _picker.hidden = YES;
+  _tag = row;
+}
+
+@end

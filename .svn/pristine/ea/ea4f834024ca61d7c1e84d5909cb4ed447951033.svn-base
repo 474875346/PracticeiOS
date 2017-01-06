@@ -1,0 +1,33 @@
+//
+//  BaseHttpRequset.m
+//  FoodSafetyAssistant
+//
+//  Created by 新龙信息 on 16/7/14.
+//  Copyright © 2016年 新龙信息. All rights reserved.
+//
+
+#import "BaseHttpRequset.h"
+
+
+@implementation BaseHttpRequset
+
++(void)HttpRequestWithUrl:(NSString *)url withParameter:(NSDictionary *)parameter WithSuccessBlock:(void(^)(NSDictionary *dic))successBlcok WithFailureBlock:(void(^)(NSString *str))failureBlcok
+{
+    
+    
+    NSLog(@"-----URL-----%@\n-------parameter--------%@",url,parameter);
+    
+    AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+    [manager POST:url parameters:parameter progress:^(NSProgress * _Nonnull uploadProgress) {
+        
+    } success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+        successBlcok(responseObject);
+        
+    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
+        failureBlcok(error.localizedDescription);
+        NSLog(@"%@",error);
+    }];
+}
+
+
+@end

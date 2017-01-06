@@ -1,0 +1,122 @@
+//
+//  Common.h
+//  Define
+//
+//  Created by 李曈 on 15/6/4.
+//  Copyright (c) 2015年 lt. All rights reserved.
+//
+#import "OMGToast.h"
+#import "HttpTool.h"
+#import "UIImageView+WebCache.h"
+#import "UIButton+WebCache.h"
+#import "MJExtension.h"
+#import "MJRefresh.h"
+#import "UITabBar+badge.h"
+
+// 1.判断是否为iPhone5的宏
+//#define iPhone5 ([UIScreen mainScreen].bounds.size.height == 568)
+#define UDOBJ(obj) [[NSUserDefaults standardUserDefaults]objectForKey:obj]
+#define UDSETOBJ(obj,key) [[NSUserDefaults standardUserDefaults]setObject:obj forKey:key]
+#define DEVICEUUID [[NSUserDefaults standardUserDefaults]objectForKey:@"DeviceUUID"]
+#define iOS8Later ([UIDevice currentDevice].systemVersion.floatValue >= 8.0f)
+// 2.日志输出宏定义
+#ifdef DEBUG
+// 调试状态
+#define MyLog(...) NSLog(__VA_ARGS__)
+#else
+// 发布状态
+#define MyLog(...)
+#endif
+//判断是否为ios8
+#define ISIOS8 ([[UIDevice currentDevice].systemVersion floatValue] >= 8.0f)
+#define isIos7Later ([[UIDevice currentDevice].systemVersion floatValue] == 7.0f)
+#define CGRECT_NO_NAV(x,y,w,h) CGRectMake((x), (y+(ISIOS8?20:0)), (w), (h))
+#define CGRECT_HAVE_NAV(x,y,w,h) CGRectMake((x), (y-(ISIOS8?0:20)), (w), (h))
+
+// 1.判断是否为iPhone4566+的宏
+#define iPhone4 [[UIScreen mainScreen] bounds].size.height >= 480 && [[UIScreen mainScreen] bounds].size.height < 568
+#define iPhone5 [[UIScreen mainScreen] bounds].size.height >= 568 && [[UIScreen mainScreen] bounds].size.height < 667
+#define iPhone6 [[UIScreen mainScreen] bounds].size.height >= 667 && [[UIScreen mainScreen] bounds].size.height < 736
+#define iPhone6P [[UIScreen mainScreen] bounds].size.height >= 736 && [[UIScreen mainScreen] bounds].size.height < 1024
+
+
+
+
+#define kFont(x) [UIFont systemFontOfSize:x]//自定义font大小
+#define W(obj)   (!obj?0:(obj).frame.size.width)
+#define H(obj)   (!obj?0:(obj).frame.size.height)
+#define X(obj)   (!obj?0:(obj).frame.origin.x)
+#define Y(obj)   (!obj?0:(obj).frame.origin.y)
+#define XW(obj) (X(obj)+W(obj))
+#define YH(obj) (Y(obj)+H(obj))
+#define BoldFont(x) [UIFont boldSystemFontOfSize:x]
+
+#define kNavH 44
+#define kStatusH 20
+#define kPBlack(obj)  [SVProgressHUD showWithStatus:obj maskType:SVProgressHUDMaskTypeBlack];
+
+#define kPS(obj) [SVProgressHUD showSuccessWithStatus:obj];
+
+#define kPE(obj) [SVProgressHUD showErrorWithStatus:obj];
+
+#define kPdismiss [SVProgressHUD dismiss];
+
+#define kLP(obj) [LTProgressHUD showMsgWithStatus:obj];
+#define KOMG(obj)[OMGToast showWithText:obj];
+#define kHttpError @"网络不给力，稍后试试"
+#define ScreenHeight [[UIScreen mainScreen] bounds].size.height
+#define ScreenWidth [[UIScreen mainScreen] bounds].size.width
+
+//#define viewBgColor    [UIColor colorWithRed:241/255.0f green:241/255.0f blue:241/255.0f alpha:1]
+#define kTableViewBackColor    [UIColor colorWithWhite:0.941 alpha:1.000]
+#define kColor(r, g, b) [UIColor colorWithRed:(r)/255.0 green:(g)/255.0 blue:(b)/255.0 alpha:1]
+
+#define ksaveLocal(key,value) [[NSUserDefaults standardUserDefaults] setObject:value forKey:key]
+#define kgetLocalData(key) [[NSUserDefaults standardUserDefaults] objectForKey:key]
+#define kremove(key) [[NSUserDefaults standardUserDefaults] removeObjectForKey:key]
+#define UserInfo_id kgetLocalData(@"id")
+
+#define International(key) [[InternationalControl bundle] localizedStringForKey:key value:nil table:@"International"]
+
+
+#define ZToken @"token"
+#define ZRefresh_token @"refresh_token"
+#define ZRegistID @"registID"
+
+
+// 宽高比frame(以6的屏幕为标准)
+#define SCALE_X(x) (x/375.0*kScreenWidth)
+#define SCALE_Y(y) (y/667.0*kScreenHeight)
+#define limit6W(x) x/375.0*kScreenWidth
+#define limit6H(x) x/667.0*kScreenHeight
+
+#define IMG(name) [UIImage imageNamed:name]
+#define HOME  NSHomeDirectory()
+#define COLOR(r,g,b,a) [UIColor colorWithRed:(r)/255.0f green:(g)/255.0f blue:(b)/255.0f alpha:(a)]
+#define SCREEN_HEIGHT [[UIScreen mainScreen]bounds].size.height
+#define SCREEN_WIDTH [[UIScreen mainScreen]bounds].size.width
+#define FORMATSTRING1(string) [NSString stringWithFormat:@"%d",string]
+#define ALERT(MESSAGE,VC) \
+UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"提示" message:MESSAGE preferredStyle:UIAlertControllerStyleAlert]; \
+UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]; \
+[alertController addAction:okAction]; \
+[VC presentViewController:alertController animated:YES completion:nil];
+
+
+//设置 view 圆角和边框
+#define ViewBorderRadius(View, Radius, Width, Color)                           \
+\
+[View.layer setCornerRadius:(Radius)];                                       \
+[View.layer setMasksToBounds:YES];                                           \
+[View.layer setBorderWidth:(Width)];                                         \
+[View.layer setBorderColor:[Color CGColor]]
+
+#define CompressionVideoPaht [NSHomeDirectory() stringByAppendingFormat:@"/Documents/CompressionVideoField"]
+
+//url
+#define BASEURL @"https://172.16.1.5:8443"
+
+
+
+
+

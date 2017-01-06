@@ -1,0 +1,25 @@
+//
+//  MonthlyReportDetailsViewController.h
+//  PracticeiOS
+//
+//  Created by 新龙科技 on 2016/12/30.
+//  Copyright © 2016年 新龙信息. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "MonthlyRecordModel.h"
+#import "MonthlyReportView.h"
+@interface MonthlyReportDetailsViewController
+    : BaseViewController
+@property(nonatomic, retain) MonthlyRecordModel *monthlyrecord;
+//月报
+@property(nonatomic, retain) MonthlyReportView *MonthlyReportContent;
+//工作总结
+@property(nonatomic, retain) MonthlyReportView *summary;
+//工作计划
+@property(nonatomic, retain) MonthlyReportView *plan;
+//滑动视图
+@property(nonatomic, retain) UIScrollView *myScrollview;
+//图片数组
+@property(nonatomic,retain)NSMutableArray*imageArray;
+@end

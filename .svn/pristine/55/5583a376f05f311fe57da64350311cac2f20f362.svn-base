@@ -1,0 +1,98 @@
+//
+//  HomePageViewController.m
+//  PracticeiOS
+//
+//  Created by 新龙信息 on 16/12/14.
+//  Copyright © 2016年 新龙信息. All rights reserved.
+//
+
+#import "HomePageViewController.h"
+// JPush
+#import "JPUSHService.h"
+#import "ImageAndLabelView.h"
+
+@interface HomePageViewController ()
+{
+    NSArray *_titleArray;
+    NSArray *_imageArray;
+}
+@end
+@implementation HomePageViewController
+
+- (void)viewDidLoad {
+  [super viewDidLoad];
+    self.view.backgroundColor = [UIColor whiteColor];
+  _spacing = (SCREEN_WIDTH - 20) / 3 - SCREEN_WIDTH / 4;
+  [self addNavigationHeadBackImage];
+  [self addtitleWithString:@"主页"];
+  [self TheDrawer];
+
+    _titleArray = [[NSArray alloc]initWithObjects:@"签到",@"签到记录",@"月报", @"月报记录",nil];
+    _imageArray = [[NSArray alloc]initWithObjects:@"qiandao",@"qiandaojilu",@"yuebao",@"yuebaojilu", nil];
+    [self createButton];
+//    [self studentHelp];
+}
+
+
+-(void)createButton{//创建按钮
+    float space = SCREEN_WIDTH/4;
+    for (int i = 0; i < _titleArray.count; i++) {
+        int a = i%4;
+        int b = i/4;
+        ImageAndLabelView *view = [[ImageAndLabelView alloc]initWithFrame:CGRectMake(a * space,64 + b * space * 1.1 , space, 1.1 * space) WithImage:_imageArray[i] WithTitle:_titleArray[i]];
+        view.button.tag = i;
+        [view.button addTarget:self action:@selector(btnClick:) forControlEvents:UIControlEventTouchUpInside];
+        [self.view addSubview:view];
+    }
+}
+
+-(void)btnClick:(UIButton *)button{//点击方法
+    switch (button.tag) {
+        case 0://签到
+        {
+            SigInViewController *SigIn = [SigInViewController new];
+            SigIn.modalTransitionStyle = 1;
+            [self presentViewController:SigIn animated:YES completion:nil];
+        }
+            break;
+        case 1://签到记录
+        {
+            SignInRecordViewController *SignInRecord = [SignInRecordViewController new];
+            SignInRecord.modalTransitionStyle = 1;
+            [self presentViewController:SignInRecord animated:YES completion:nil];
+        }
+            break;
+        case 2://月报
+        {
+            MonthlyReporViewController *MonthlyRepor = [MonthlyReporViewController new];
+            MonthlyRepor.modalTransitionStyle = 1;
+            [self presentViewController:MonthlyRepor animated:YES completion:nil];
+        }
+            break;
+            case 3:
+        {
+            MonthlyRecordViewController * MonthlyRecord = [MonthlyRecordViewController new];
+            MonthlyRecord.modalTransitionStyle = 1;
+            [self presentViewController:MonthlyRecord animated:YES completion:nil];
+        }
+            break;
+        default:
+            break;
+    }
+}
+//一键呼救
+-(void)studentHelp {
+   UIButton* Help = [UIButton buttonWithType:UIButtonTypeCustom];
+    Help.frame = CGRectMake(ScreenWidth-100, 20, 100,44);
+    [Help setTitle:@"一键呼救" forState:UIControlStateNormal];
+    [Help setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [Help addTarget:self
+                action:@selector(Help:)
+      forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:Help];
+}
+-(void)Help:(UIButton*)btn {
+    [self StudentHelp];
+}
+
+@end

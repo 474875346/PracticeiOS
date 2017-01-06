@@ -1,0 +1,658 @@
+//
+//  HttpTool.m
+//  FoodSafetyAssistant
+//
+//  Created by 新龙科技 on 16/8/11.
+//  Copyright © 2016年 新龙信息. All rights reserved.
+//
+
+#import "HttpTool.h"
+
+@implementation HttpTool
++ (HttpTool *)sharedInstance {
+  static id sharedInstance = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    sharedInstance = [[self alloc] init];
+  });
+  return sharedInstance;
+}
+
+/**
+ *  普通的 post 请求
+ *
+ *  @param url        接口地址 Url
+ *  @param parameters 请求参数
+ *  @param sucess     成功后的回调
+ *  @param failur     失败后的回调
+ */
+- (void)postWithUrl:(NSString *)url
+         parameters:(NSDictionary *)parameters
+             sucess:(BaseHttpToolSucess)sucess
+             failur:(BaseHttpToolFailur)failur {
+
+  // 初始化Manager
+   _manager= [AFHTTPSessionManager manager];
+//    [self P12certification];
+  _manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+  [_manager setSecurityPolicy:[self customSecurityPolicy]];
+  _manager.responseSerializer.acceptableContentTypes =
+      [NSSet setWithObjects:@"text/html", @"application/json", nil];
+  _manager.requestSerializer.timeoutInterval = 20;
+  NSString *URLS = [BASEURL stringByAppendingString:url];
+  NSLog(@"url:%@ ------- parmeters:%@ ", URLS, parameters);
+  [_manager POST:URLS
+      parameters:parameters
+      progress:^(NSProgress *_Nonnull uploadProgress) {
+
+      }
+      success:^(NSURLSessionDataTask *_Nonnull task,
+                id _Nullable responseObject) {
+
+        NSDictionary *dict = [NSJSONSerialization
+            JSONObjectWithData:responseObject
+                       options:NSJSONReadingMutableContainers
+                         error:nil];
+        if (sucess) {
+          NSString *str = [self dictionaryToJson:dict];
+          NSLog(@"返回的数据为%@", str);
+          sucess(dict);
+        }
+      }
+      failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
+        NSLog(@"错误为%@", error);
+        if (failur) {
+          failur(error);
+        }
+      }];
+}
+-(void)P12certification{
+    __weak typeof(self)weakSelf = self;
+    [_manager setSessionDidReceiveAuthenticationChallengeBlock:^NSURLSessionAuthChallengeDisposition(NSURLSession*session, NSURLAuthenticationChallenge *challenge, NSURLCredential *__autoreleasing*_credential) {
+        NSURLSessionAuthChallengeDisposition disposition = NSURLSessionAuthChallengePerformDefaultHandling;
+        __autoreleasing NSURLCredential *credential =nil;
+        if([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
+            if([weakSelf.manager.securityPolicy evaluateServerTrust:challenge.protectionSpace.serverTrust forDomain:challenge.protectionSpace.host]) {
+                credential = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
+                if(credential) {
+                    disposition =NSURLSessionAuthChallengeUseCredential;
+                } else {
+                    disposition =NSURLSessionAuthChallengePerformDefaultHandling;
+                }
+            } else {
+                disposition = NSURLSessionAuthChallengeCancelAuthenticationChallenge;
+            }
+        } else {
+            // client authentication
+            SecIdentityRef identity = NULL;
+            SecTrustRef trust = NULL;
+            NSString *p12 = [[NSBundle mainBundle] pathForResource:@"client"ofType:@"p12"];
+            NSFileManager *fileManager =[NSFileManager defaultManager];
+            
+            if(![fileManager fileExistsAtPath:p12])
+            {
+                NSLog(@"client.p12:not exist");
+            }
+            else
+            {
+                NSData *PKCS12Data = [NSData dataWithContentsOfFile:p12];
+                
+                if ([[weakSelf class]extractIdentity:&identity andTrust:&trust fromPKCS12Data:PKCS12Data])
+                {
+                    SecCertificateRef certificate = NULL;
+                    SecIdentityCopyCertificate(identity, &certificate);
+                    const void*certs[] = {certificate};
+                    CFArrayRef certArray =CFArrayCreate(kCFAllocatorDefault, certs,1,NULL);
+                    credential =[NSURLCredential credentialWithIdentity:identity certificates:(__bridge  NSArray*)certArray persistence:NSURLCredentialPersistencePermanent];
+                    disposition =NSURLSessionAuthChallengeUseCredential;
+                }
+            }
+        }
+        *_credential = credential;
+        return disposition;
+    }];
+}
++(BOOL)extractIdentity:(SecIdentityRef*)outIdentity andTrust:(SecTrustRef *)outTrust fromPKCS12Data:(NSData *)inPKCS12Data {
+    OSStatus securityError = errSecSuccess;
+    //client certificate password
+    NSDictionary*optionsDictionary = [NSDictionary dictionaryWithObject:@"123456"
+                                                                 forKey:(__bridge id)kSecImportExportPassphrase];
+    
+    CFArrayRef items = CFArrayCreate(NULL, 0, 0, NULL);
+    securityError = SecPKCS12Import((__bridge CFDataRef)inPKCS12Data,(__bridge CFDictionaryRef)optionsDictionary,&items);
+    
+    if(securityError == 0) {
+        CFDictionaryRef myIdentityAndTrust =CFArrayGetValueAtIndex(items,0);
+        const void*tempIdentity =NULL;
+        tempIdentity= CFDictionaryGetValue (myIdentityAndTrust,kSecImportItemIdentity);
+        *outIdentity = (SecIdentityRef)tempIdentity;
+        const void*tempTrust =NULL;
+        tempTrust = CFDictionaryGetValue(myIdentityAndTrust,kSecImportItemTrust);
+        *outTrust = (SecTrustRef)tempTrust;
+    } else {
+        NSLog(@"Failedwith error code %d",(int)securityError);
+        return NO;
+    }
+    return YES;
+}
+- (AFSecurityPolicy *)customSecurityPolicy {
+//  NSSet<NSData *> *cerSet =
+//      [AFSecurityPolicy certificatesInBundle:[NSBundle mainBundle]];
+    NSString * cerPath = [[NSBundle mainBundle] pathForResource:@"tomcat" ofType:@"cer"];
+    NSData * cerData = [NSData dataWithContentsOfFile:cerPath];
+//    NSLog(@"%@ ",cerSet);
+  // AFSSLPinningModeCertificate 使用证书验证模式
+  AFSecurityPolicy *securityPolicy =
+      [AFSecurityPolicy policyWithPinningMode:AFSSLPinningModeCertificate];
+
+  // allowInvalidCertificates 是否允许无效证书（也就是自建的证书），默认为NO
+  // 如果是需要验证自建证书，需要设置为YES
+  securityPolicy.allowInvalidCertificates = YES;
+
+  // validatesDomainName 是否需要验证域名，默认为YES；
+  //假如证书的域名与你请求的域名不一致，需把该项设置为NO；如设成NO的话，即服务器使用其他可信任机构颁发的证书，也可以建立连接，这个非常危险，建议打开。
+  //置为NO，主要用于这种情况：客户端请求的是子域名，而证书上的是另外一个域名。因为SSL证书上的域名是独立的，假如证书上注册的域名是www.google.com，那么mail.google.com是无法验证通过的；当然，有钱可以注册通配符的域名*.google.com，但这个还是比较贵的。
+  //如置为NO，建议自己添加对应域名的校验逻辑。
+  securityPolicy.validatesDomainName = NO;
+
+  securityPolicy.pinnedCertificates = (NSSet<NSData *>*)@[cerData];
+
+  return securityPolicy;
+}
+
+/**
+ *  普通的 get 请求
+ *
+ *  @param url        接口地址 Url
+ *  @param parameters 请求参数
+ *  @param sucess     成功后的回调
+ *  @param failur     失败后的回调
+ */
+- (void)getWithUrl:(NSString *)url
+        parameters:(NSDictionary *)parameters
+            sucess:(BaseHttpToolSucess)sucess
+            failur:(BaseHttpToolFailur)failur {
+
+  AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+  manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+  manager.responseSerializer.acceptableContentTypes =
+      [NSSet setWithObjects:@"text/html", @"application/json", nil];
+  manager.requestSerializer.timeoutInterval = 20;
+  NSString *URLS = [BASEURL stringByAppendingString:url];
+
+  [manager GET:URLS
+      parameters:parameters
+      progress:^(NSProgress *_Nonnull downloadProgress) {
+      }
+      success:^(NSURLSessionDataTask *_Nonnull task,
+                id _Nullable responseObject) {
+        NSDictionary *dict = [NSJSONSerialization
+            JSONObjectWithData:responseObject
+                       options:NSJSONReadingMutableContainers
+                         error:nil];
+        //        NSString *str = [self dictionaryToJson:dict];
+        if (sucess) {
+          sucess(dict);
+        }
+        NSLog(@"返回的数据为%@", dict);
+
+      }
+      failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
+        NSLog(@"错误为%@", error);
+        if (failur) {
+          failur(error);
+        }
+
+      }];
+}
+
+//提交照片
+- (void)postImage:(NSArray *)images
+       parameters:(NSDictionary *)parameters
+              url:(NSString *)url
+           sucess:(BaseHttpToolSucess)sucess
+           failur:(BaseHttpToolFailur)failur
+      andProgress:(BaseHttpProgress)progress {
+  _manager = [AFHTTPSessionManager manager];
+    [self P12certification];
+    [_manager setSecurityPolicy:[self customSecurityPolicy]];
+  _manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+  _manager.responseSerializer.acceptableContentTypes = [NSSet
+      setWithObjects:@"text/html", @"application/json", @"text/plain", nil];
+  _manager.requestSerializer.timeoutInterval = 20;
+  NSString *URLS = [BASEURL stringByAppendingString:url];
+  [_manager POST:URLS
+      parameters:parameters
+      constructingBodyWithBlock:^(id<AFMultipartFormData> _Nonnull formData) {
+        for (UIImage *img in images) {
+          NSData *imgdata = UIImageJPEGRepresentation(img, 0.5);
+          NSString *name = [self getCurrentTime];
+          NSString *fileName = [NSString stringWithFormat:@"%@.jpg", name];
+          [formData appendPartWithFileData:imgdata
+                                      name:@"image"
+                                  fileName:fileName
+                                  mimeType:@"jpg"];
+        }
+      }
+      progress:^(NSProgress *_Nonnull uploadProgress) {
+
+      }
+      success:^(NSURLSessionDataTask *_Nonnull task,
+                id _Nullable responseObject) {
+        NSDictionary *dict = [NSJSONSerialization
+            JSONObjectWithData:responseObject
+                       options:NSJSONReadingMutableContainers
+                         error:nil];
+        NSLog(@"返回的数据为%@", dict);
+
+        if (sucess) {
+          sucess(dict);
+        }
+      }
+      failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
+        NSLog(@"错误为%@", error);
+        NSLog(@"错误描述为%@", [error localizedDescription]);
+        if (failur) {
+          failur(error);
+        }
+      }];
+}
+
+/**
+ *  删除请求
+ *
+ *  @param url        接口地址 Url
+ *  @param parameters 请求参数
+ *  @param sucess     成功后的回调
+ *  @param failur     失败后的回调
+ */
+- (void)DeleteWithUrl:(NSString *)url
+           parameters:(NSDictionary *)parameters
+               sucess:(BaseHttpToolSucess)sucess
+               failur:(BaseHttpToolFailur)failur {
+  AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+  manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+  manager.responseSerializer.acceptableContentTypes =
+      [NSSet setWithObjects:@"text/html", @"application/json", nil];
+  manager.requestSerializer.timeoutInterval = 20;
+  NSString *URLS = [BASEURL stringByAppendingString:url];
+  [manager DELETE:URLS
+      parameters:parameters
+      success:^(NSURLSessionDataTask *_Nonnull task,
+                id _Nullable responseObject) {
+        NSLog(@"返回的数据为%@", responseObject);
+        NSDictionary *dict = [NSJSONSerialization
+            JSONObjectWithData:responseObject
+                       options:NSJSONReadingMutableContainers
+                         error:nil];
+        if (sucess) {
+          sucess(dict);
+        }
+      }
+      failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
+        NSLog(@"错误为%@", error);
+        if (failur) {
+          failur(error);
+        }
+      }];
+}
+/**
+ *  普通的 put 请求
+ *
+ *  @param url        接口地址 Url
+ *  @param parameters 请求参数
+ *  @param sucess     成功后的回调
+ *  @param failur     失败后的回调
+ */
+- (void)putWithUrl:(NSString *)url
+        parameters:(NSDictionary *)parameters
+            sucess:(BaseHttpToolSucess)sucess
+            failur:(BaseHttpToolFailur)failur {
+  AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+  manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+  manager.responseSerializer.acceptableContentTypes =
+      [NSSet setWithObjects:@"text/html", @"application/json", nil];
+  manager.requestSerializer.timeoutInterval = 20;
+  NSString *URLS = [BASEURL stringByAppendingString:url];
+
+  [manager PUT:URLS
+      parameters:parameters
+      success:^(NSURLSessionDataTask *_Nonnull task,
+                id _Nullable responseObject) {
+        NSDictionary *dict = [NSJSONSerialization
+            JSONObjectWithData:responseObject
+                       options:NSJSONReadingMutableContainers
+                         error:nil];
+        //        NSString *str = [self dictionaryToJson:dict];
+        if (sucess) {
+          sucess(dict);
+        }
+        NSLog(@"返回的数据为%@", dict);
+      }
+      failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
+        NSLog(@"错误为%@", error);
+        if (failur) {
+          failur(error);
+        }
+
+      }];
+}
+//字典转化成字符串
+- (NSString *)dictionaryToJson:(NSDictionary *)dic
+
+{
+
+  NSError *parseError = nil;
+
+  NSData *jsonData =
+      [NSJSONSerialization dataWithJSONObject:dic
+                                      options:NSJSONWritingPrettyPrinted
+                                        error:&parseError];
+  return [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+}
+
+- (void)upLoadToUrlString:(NSString *)url
+               parameters:(NSDictionary *)parameters
+                 fileData:(NSMutableArray *)fileData
+                 mimeType:(NSMutableArray *)mimeType
+                 progress:(void (^)(NSProgress *))progress
+                  success:(void (^)(NSURLSessionDataTask *, id))success
+                  failure:(void (^)(NSURLSessionDataTask *, NSError *))failure {
+  NSLog(@"%lu", (unsigned long)fileData.count);
+  //视频上传
+  NSString *URL = [NSString stringWithFormat:@"%@%@", BASEURL, url];
+  NSLog(@"URL:%@-------\nparameters:%@", URL, parameters);
+  AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+  manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+  // 3.设置相应数据支持的类型
+  [manager.responseSerializer
+      setAcceptableContentTypes:
+          [NSSet setWithObjects:@"application/json", @"text/json",
+                                @"text/javascript", @"text/html", @"text/css",
+                                @"text/plain", @"application/javascript",
+                                @"application/json",
+                                @"application/x-www-form-urlencoded", nil]];
+
+  [manager POST:URL
+      parameters:parameters
+      constructingBodyWithBlock:^(id<AFMultipartFormData> _Nonnull formData) {
+        for (int i = 0; i < fileData.count; i++) {
+          NSString *name =
+              [NSString stringWithFormat:@"%@%d", [self getCurrentTime], i];
+          NSString *fileName =
+              [NSString stringWithFormat:@"%@%d.%@", name, i + 1, mimeType[i]];
+          NSLog(@"%@", fileName);
+          [formData appendPartWithFileData:fileData[i]
+                                      name:name
+                                  fileName:fileName
+                                  mimeType:mimeType[i]];
+        }
+      }
+      progress:^(NSProgress *_Nonnull uploadProgress) {
+
+      }
+      success:^(NSURLSessionDataTask *_Nonnull task,
+                id _Nullable responseObject) {
+
+        if (success) {
+          NSDictionary *dict = [NSJSONSerialization
+              JSONObjectWithData:responseObject
+                         options:NSJSONReadingMutableContainers
+                           error:nil];
+          NSLog(@"%@", dict);
+          success(task, dict);
+        }
+      }
+      failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
+        NSLog(@"%@", error);
+        if (failure) {
+          failure(task, error);
+        }
+      }];
+}
+
+// 获取当前时间
+- (NSString *)getCurrentTime {
+  NSDate *datenow = [NSDate date];
+  NSString *timeSp =
+      [NSString stringWithFormat:@"%ld", (long)[datenow timeIntervalSince1970]];
+  return timeSp;
+}
+
+/**
+ 判断网络状态
+ **/
+- (void)startMonitoring {
+  // 1.获得网络监控的管理者
+  AFNetworkReachabilityManager *manager =
+      [AFNetworkReachabilityManager sharedManager];
+  // 2.设置网络状态改变后的处理
+  [manager
+      setReachabilityStatusChangeBlock:^(AFNetworkReachabilityStatus status) {
+        switch (status) {
+
+        case AFNetworkReachabilityStatusUnknown: {
+
+        }
+
+        break;
+        case AFNetworkReachabilityStatusNotReachable:
+          KOMG(@"你当前的网络状态：无网络");
+          break;
+
+        case AFNetworkReachabilityStatusReachableViaWWAN:
+          KOMG(@"你当前的网络状态：数据网络");
+          break;
+
+        case AFNetworkReachabilityStatusReachableViaWiFi:
+          KOMG(@"你当前的网络状态：WiFi");
+
+          break;
+
+        default:
+          break;
+        }
+
+      }];
+  [manager startMonitoring];
+}
+
+#pragma mark 获取ipv6地址
++ (NSString *)formatIPV6Address:(struct in6_addr)ipv6Addr {
+  NSString *address = nil;
+
+  char dstStr[INET6_ADDRSTRLEN];
+  char srcStr[INET6_ADDRSTRLEN];
+  memcpy(srcStr, &ipv6Addr, sizeof(struct in6_addr));
+  if (inet_ntop(AF_INET6, srcStr, dstStr, INET6_ADDRSTRLEN) != NULL) {
+    address = [NSString stringWithUTF8String:dstStr];
+  }
+
+  return address;
+}
+#pragma mark 获取ipv4地址
++ (NSString *)getIPAddress {
+  NSString *address = @"error";
+  struct ifaddrs *interfaces = NULL;
+  struct ifaddrs *temp_addr = NULL;
+  int success = 0;
+  // retrieve the current interfaces - returns 0 on success
+  success = getifaddrs(&interfaces);
+  if (success == 0) {
+    // Loop through linked list of interfaces
+    temp_addr = interfaces;
+    while (temp_addr != NULL) {
+      if (temp_addr->ifa_addr->sa_family == AF_INET) {
+        // Check if interface is en0 which is the wifi connection on the iPhone
+        if ([[NSString stringWithUTF8String:temp_addr->ifa_name]
+                isEqualToString:@"en0"]) {
+          // Get NSString from C String
+          address =
+              [NSString stringWithUTF8String:inet_ntoa(((struct sockaddr_in *)
+                                                            temp_addr->ifa_addr)
+                                                           ->sin_addr)];
+        }
+      }
+      temp_addr = temp_addr->ifa_next;
+    }
+  }
+  // Free memory
+  freeifaddrs(interfaces);
+  return address;
+}
+
+//获得设备型号
++ (NSString *)iphoneType {
+
+  struct utsname systemInfo;
+
+  uname(&systemInfo);
+
+  NSString *platform = [NSString stringWithCString:systemInfo.machine
+                                          encoding:NSASCIIStringEncoding];
+
+  if ([platform isEqualToString:@"iPhone1,1"])
+    return @"iPhone 2G";
+
+  if ([platform isEqualToString:@"iPhone1,2"])
+    return @"iPhone 3G";
+
+  if ([platform isEqualToString:@"iPhone2,1"])
+    return @"iPhone 3GS";
+
+  if ([platform isEqualToString:@"iPhone3,1"])
+    return @"iPhone 4";
+
+  if ([platform isEqualToString:@"iPhone3,2"])
+    return @"iPhone 4";
+
+  if ([platform isEqualToString:@"iPhone3,3"])
+    return @"iPhone 4";
+
+  if ([platform isEqualToString:@"iPhone4,1"])
+    return @"iPhone 4S";
+
+  if ([platform isEqualToString:@"iPhone5,1"])
+    return @"iPhone 5";
+
+  if ([platform isEqualToString:@"iPhone5,2"])
+    return @"iPhone 5";
+
+  if ([platform isEqualToString:@"iPhone5,3"])
+    return @"iPhone 5c";
+
+  if ([platform isEqualToString:@"iPhone5,4"])
+    return @"iPhone 5c";
+
+  if ([platform isEqualToString:@"iPhone6,1"])
+    return @"iPhone 5s";
+
+  if ([platform isEqualToString:@"iPhone6,2"])
+    return @"iPhone 5s";
+
+  if ([platform isEqualToString:@"iPhone7,1"])
+    return @"iPhone 6 Plus";
+
+  if ([platform isEqualToString:@"iPhone7,2"])
+    return @"iPhone 6";
+
+  if ([platform isEqualToString:@"iPhone8,1"])
+    return @"iPhone 6s";
+
+  if ([platform isEqualToString:@"iPhone8,2"])
+    return @"iPhone 6s Plus";
+
+  if ([platform isEqualToString:@"iPhone8,4"])
+    return @"iPhone SE";
+
+  if ([platform isEqualToString:@"iPhone9,1"])
+    return @"iPhone 7";
+
+  if ([platform isEqualToString:@"iPhone9,2"])
+    return @"iPhone 7 Plus";
+
+  if ([platform isEqualToString:@"iPod1,1"])
+    return @"iPod Touch 1G";
+
+  if ([platform isEqualToString:@"iPod2,1"])
+    return @"iPod Touch 2G";
+
+  if ([platform isEqualToString:@"iPod3,1"])
+    return @"iPod Touch 3G";
+
+  if ([platform isEqualToString:@"iPod4,1"])
+    return @"iPod Touch 4G";
+
+  if ([platform isEqualToString:@"iPod5,1"])
+    return @"iPod Touch 5G";
+
+  if ([platform isEqualToString:@"iPad1,1"])
+    return @"iPad 1G";
+
+  if ([platform isEqualToString:@"iPad2,1"])
+    return @"iPad 2";
+
+  if ([platform isEqualToString:@"iPad2,2"])
+    return @"iPad 2";
+
+  if ([platform isEqualToString:@"iPad2,3"])
+    return @"iPad 2";
+
+  if ([platform isEqualToString:@"iPad2,4"])
+    return @"iPad 2";
+
+  if ([platform isEqualToString:@"iPad2,5"])
+    return @"iPad Mini 1G";
+
+  if ([platform isEqualToString:@"iPad2,6"])
+    return @"iPad Mini 1G";
+
+  if ([platform isEqualToString:@"iPad2,7"])
+    return @"iPad Mini 1G";
+
+  if ([platform isEqualToString:@"iPad3,1"])
+    return @"iPad 3";
+
+  if ([platform isEqualToString:@"iPad3,2"])
+    return @"iPad 3";
+
+  if ([platform isEqualToString:@"iPad3,3"])
+    return @"iPad 3";
+
+  if ([platform isEqualToString:@"iPad3,4"])
+    return @"iPad 4";
+
+  if ([platform isEqualToString:@"iPad3,5"])
+    return @"iPad 4";
+
+  if ([platform isEqualToString:@"iPad3,6"])
+    return @"iPad 4";
+
+  if ([platform isEqualToString:@"iPad4,1"])
+    return @"iPad Air";
+
+  if ([platform isEqualToString:@"iPad4,2"])
+    return @"iPad Air";
+
+  if ([platform isEqualToString:@"iPad4,3"])
+    return @"iPad Air";
+
+  if ([platform isEqualToString:@"iPad4,4"])
+    return @"iPad Mini 2G";
+
+  if ([platform isEqualToString:@"iPad4,5"])
+    return @"iPad Mini 2G";
+
+  if ([platform isEqualToString:@"iPad4,6"])
+    return @"iPad Mini 2G";
+
+  if ([platform isEqualToString:@"i386"])
+    return @"iPhone Simulator";
+
+  if ([platform isEqualToString:@"x86_64"])
+    return @"iPhone Simulator";
+
+  return platform;
+}
+
+@end

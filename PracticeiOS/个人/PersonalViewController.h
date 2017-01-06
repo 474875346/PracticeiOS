@@ -1,0 +1,14 @@
+//
+//  PersonalViewController.h
+//  PracticeiOS
+//
+//  Created by 新龙信息 on 16/12/14.
+//  Copyright © 2016年 新龙信息. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "PersonalModel.h"
+#import "ChangeThePasswordViewController.h"
+@interface PersonalViewController : BaseViewController
+@property(nonatomic,retain) PersonalModel*Personal;
+@end
